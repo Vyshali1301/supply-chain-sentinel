@@ -68,52 +68,41 @@ Evidence is attributed to its source, allowing operators to distinguish between 
 
 ---
 
-## 3. Conflict and Contradiction Detection
+## 🧪 Hackathon Demonstration Scenarios
 
-The platform performs validation checks before treating a disruption as an actionable business incident.
+1. **Scenario A (Impact Detected)**:
+   - Input: *"ABC supplier informed us that 500 Laptop X units will be delayed by 5 days because of a transportation problem."*
+   - Outcome: `IMPACT DETECTED`. Shortage: 450 units. Order Value at Risk: ₹4,27,50,000 (₹4.275 Crore) across customer orders `ORD-901` and `ORD-902`.
 
-It can identify conditions such as:
+2. **Scenario B (NO IMPACT Case)**:
+   - Input: *"Supplier FastFab announced a 3-day delay on Ergonomic Chair Pro shipments due to port congestion."*
+   - Outcome: `NO IMPACT`. On-hand inventory (400 units) > Open customer demand (30 units). Remaining stock buffer: 370 units.
 
-- Supplier mismatch
-- Shipment mismatch
-- Quantity discrepancy
-- Missing product records
-- Conflicting master-data information
+3. **Scenario C (Contradiction Flagged)**:
+   - Input: *"Supplier Global Microchip Co reports 1000 units of Laptop X delayed by 10 days."*
+   - Outcome: `NEEDS VERIFICATION`. Flags Supplier Mismatch (Disruption claims Global Microchip Co vs DB master shows ABC Supplier Co) and Quantity Discrepancy (1000 units claimed vs 500 in DB).
 
-When contradictory information is detected, the incident is marked:
-
-`NEEDS VERIFICATION`
-
-This prevents potentially incorrect disruption information from automatically driving operational decisions.
+4. **Scenario D (Dynamic New Order Recalculation)**:
+   - Action: Add new customer order `ORD-999` for 450 units of Ergonomic Chair Pro via `+ New Order` modal.
+   - Outcome: Re-running Scenario B dynamically switches status from `NO IMPACT` to `IMPACT DETECTED` (Shortage: 80 units, Order Value at Risk: ₹17,60,000).
 
 ---
 
-# 4. Deterministic Business Impact Analysis
+## 💻 API Endpoints
 
-Business-impact calculations are performed by the Python impact engine using operational database records.
+- `GET /` - Main SPA Command Center UI
+- `GET /api/dashboard` - Executive stats & Chart.js sales analytics (₹ INR)
+- `GET /api/data` - Master dataset (Products, Suppliers, Inventory, Shipments, Customer Orders, Disruptions)
+- `POST /api/data/update` - Dynamic record editor
+- `POST /api/data/orders` - Add new customer order (Scenario D)
+- `POST /api/disruptions/report` - Run PS08 impact analysis pipeline
+- `GET /api/disruptions/<id>` - Retrieve structured disruption report & trace payload
+- `POST /api/disruptions/<id>/decision` - Record human decision (`Approved Action`, `Modify Strategy`, `Reject`)
+- `POST /api/qa` - Grounded database question answering
+- `POST /api/seed/reset` - Reset database to clean seed state
 
-The calculation engine determines:
+---
 
-- Available inventory
-- Open customer demand
-- Incoming shipment quantities
-- Inventory buffer
-- Shortage quantity
-- Affected customer orders
-- Order value at risk
-- Potential fulfillment impact
-
-The system distinguishes between three primary outcomes:
-
-### NO IMPACT
-
-The available inventory can satisfy current open demand without depending on the delayed shipment.
-
-Example:
-
-```text
-Inventory On Hand: 400 units
-Open Demand: 30 units
-Remaining Buffer: 370 units
-
-Status: NO IMPACT
+## ⚠️ Limitations
+- Local SQLite database suitable for single-developer hackathon demonstration.
+- Grounded QA engine uses pattern matching on active DB tables and disruption summaries; queries outside current DB schema return *"Insufficient data in database to answer reliably."*

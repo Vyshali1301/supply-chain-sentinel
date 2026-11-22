@@ -157,7 +157,19 @@ function getFormattedIntakeTimestamp() {
 }
 
 // Tab Navigation
+function toggleSidebar() {
+  const sidebar = document.querySelector('.sidebar');
+  if (sidebar) {
+    sidebar.classList.toggle('open');
+  }
+}
+
 function switchTab(tabId) {
+  const sidebar = document.querySelector('.sidebar');
+  if (sidebar && sidebar.classList.contains('open')) {
+    sidebar.classList.remove('open');
+  }
+
   document.querySelectorAll('.nav-item').forEach(btn => btn.classList.remove('active'));
   document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
 
@@ -344,20 +356,26 @@ async function loadDisruptionReportById(dId) {
     const res = await fetch(`/api/disruptions/${dId}`);
     const data = await res.json();
     if (data.id) {
+      // Normalise DB field names to match the renderReportView contract
+      const impJson = data.impact_summary_json || {};
       activeDisruptionData = {
         disruption_id: data.id,
         raw_text: data.raw_text,
-        extracted_info: data.extracted_json,
+        extracted_info: data.extracted_json || {},
         status: data.status,
-        evidence: data.evidence_json,
-        impact_summary: data.impact_summary_json,
-        response_options: data.impact_summary_json.response_options || [],
-        ai_recommendation: data.impact_summary_json.ai_recommendation || '',
-        trace: data.trace_json,
-        human_decision: data.human_decision
+        evidence: data.evidence_json || {},
+        impact_summary: impJson,
+        response_options: impJson.response_options || [],
+        ai_recommendation: impJson.ai_recommendation || '',
+        trace: data.trace_json || { nodes: [], edges: [] },
+        human_decision: data.human_decision,
+        mitigation_status: data.mitigation_status,
+        mitigation_cost: data.mitigation_cost,
+        mitigation_notes: data.mitigation_notes,
+        created_at: data.created_at
       };
       renderReportView(activeDisruptionData);
-      renderImpactTrace(data.trace_json);
+      renderImpactTrace(activeDisruptionData.trace);
       switchTab('report');
     }
   } catch (err) {
@@ -715,10 +733,15 @@ function renderReportView(data) {
 
       <div style="border-top: 1px solid var(--border-color); padding-top: 0.75rem; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 0.75rem;">
         <div>
-          <span style="font-size: 0.75rem; font-weight: 700; color: var(--text-muted);">DECISION STATUS:</span>
+          <span style="font-size: 0.75rem; font-weight: 700; color: var(--text-muted);">DECISION:</span>
           <span id="humanDecisionStatus" style="font-family: var(--font-mono); font-weight: 800; color: var(--color-green); margin-left: 0.4rem;">
             ${data.human_decision || 'Pending Review'}
           </span>
+          <span style="margin-left: 0.75rem; font-size: 0.75rem; font-weight: 700; color: var(--text-muted);">LIFECYCLE:</span>
+          <span style="font-family: var(--font-mono); font-weight: 800; color: ${data.mitigation_status === 'In Progress' ? 'var(--accent-cyan)' : (data.mitigation_status === 'Resolved' ? 'var(--color-green)' : 'var(--text-muted)')}; margin-left: 0.4rem;">
+            ${data.mitigation_status || 'Pending Review'}
+          </span>
+          ${data.mitigation_cost ? `<span style="margin-left: 0.75rem; font-size: 0.75rem; color: var(--accent-rose); font-weight: 700;">COST: ₹${Number(data.mitigation_cost).toLocaleString('en-IN', {minimumFractionDigits: 2})}</span>` : ''}
         </div>
 
         <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
@@ -727,6 +750,11 @@ function renderReportView(data) {
           <button class="btn btn-danger btn-sm" onclick="commitHumanDecision(${data.disruption_id}, 'Rejected / Standby')">REJECT / STANDBY</button>
         </div>
       </div>
+      ${data.mitigation_notes ? `
+        <div style="margin-top: 0.6rem; padding: 0.5rem 0.75rem; background: rgba(0,0,0,0.3); border-left: 3px solid var(--accent-cyan); font-size: 0.75rem; color: var(--text-muted); line-height: 1.4;">
+          <strong>Operational Detail:</strong> ${data.mitigation_notes}
+        </div>
+      ` : ''}
     </div>
   `;
 
@@ -822,8 +850,49 @@ async function commitHumanDecision(dId, decisionText) {
     });
     const data = await res.json();
     if (data.success) {
-      document.getElementById('humanDecisionStatus').innerText = decisionText;
-      alert(`Human Decision Recorded: ${decisionText}`);
+      const decisionEl = document.getElementById('humanDecisionStatus');
+      if (decisionEl) decisionEl.innerText = decisionText;
+
+      if (data.already_applied) {
+        alert(`Strategy already in progress: ${decisionText}\nOperational state was already committed.`);
+      } else {
+        alert(`Decision Implemented: ${decisionText}\nLifecycle: ${data.mitigation_status || 'In Progress'}\nMitigation Cost: ₹${(data.mitigation_cost || 0).toLocaleString('en-IN')}\nRevised ETA: ${data.revised_eta || 'Preserved'}`);
+      }
+
+      // Re-fetch disruption report to refresh visual Impact Trace and details
+      try {
+        const repRes = await fetch(`/api/disruptions/${dId}`);
+        if (repRes.ok) {
+          const dbDisruption = await repRes.json();
+          // Normalise DB field names to match renderReportView contract
+          const impJson = dbDisruption.impact_summary_json || {};
+          activeDisruptionData = {
+            disruption_id: dbDisruption.id,
+            raw_text: dbDisruption.raw_text,
+            extracted_info: dbDisruption.extracted_json || {},
+            status: dbDisruption.status,
+            evidence: dbDisruption.evidence_json || {},
+            impact_summary: impJson,
+            response_options: impJson.response_options || [],
+            ai_recommendation: impJson.ai_recommendation || '',
+            trace: dbDisruption.trace_json || { nodes: [], edges: [] },
+            human_decision: dbDisruption.human_decision,
+            mitigation_status: dbDisruption.mitigation_status,
+            mitigation_cost: dbDisruption.mitigation_cost,
+            mitigation_notes: dbDisruption.mitigation_notes,
+            created_at: dbDisruption.created_at
+          };
+          renderReportView(activeDisruptionData);
+          renderImpactTrace(activeDisruptionData.trace);
+        }
+      } catch (e) {
+        console.warn('Could not refresh disruption report trace:', e);
+      }
+
+      initDashboard();
+      loadAllData();
+    } else {
+      alert('Error updating decision: ' + (data.error || 'Failed'));
     }
   } catch (err) {
     alert('Failed to record decision: ' + err.message);
@@ -888,6 +957,7 @@ async function loadAllData() {
           <td>
             <span class="badge ${badgeClass}">${o.status}</span>
             <div style="font-size: 0.72rem; color: var(--accent-cyan); font-weight: 700; margin-top: 0.2rem;">${fulfillPct}% Fulfilled</div>
+            ${o.sla_status && o.sla_status !== 'On Schedule' ? `<div style="font-size: 0.68rem; color: var(--color-green); font-weight: 700; margin-top: 0.2rem;">🛡️ ${o.sla_status}</div>` : ''}
           </td>
           <td>
             ${remaining > 0 ? `
@@ -902,13 +972,26 @@ async function loadAllData() {
 
     // Shipments
     const shpBody = document.getElementById('tbl-shipments-body');
-    const statuses = ['Scheduled', 'In Transit', 'Delayed', 'Partially Received', 'Received'];
+    const validStatuses = [
+      'Scheduled', 
+      'In Transit', 
+      'In Transit (Expedited Air)', 
+      'In Transit (Hybrid Air/Ocean)', 
+      'Delayed', 
+      'Partially Received', 
+      'Received'
+    ];
     shpBody.innerHTML = data.shipments.map(s => {
       const rec = s.received_quantity || 0;
       const rem = s.remaining_quantity !== undefined ? s.remaining_quantity : (s.quantity - rec);
-      const statusOptions = statuses.map(st => `<option value="${st}" ${s.status === st ? 'selected' : ''}>${st}</option>`).join('');
+      const currentStatuses = [...validStatuses];
+      if (s.status && !currentStatuses.includes(s.status)) {
+        currentStatuses.push(s.status);
+      }
+      const statusOptions = currentStatuses.map(st => `<option value="${st}" ${s.status === st ? 'selected' : ''}>${st}</option>`).join('');
       const isDelayed = s.status === 'Delayed';
-      const lateBadgeHtml = isDelayed ? `<div style="font-size: 0.7rem; color: var(--accent-rose); font-weight: 700; margin-top: 0.15rem;">⚠️ 5 DAYS LATE</div>` : '';
+      const isExpedited = s.status && s.status.includes('Expedited Air');
+      const lateBadgeHtml = isDelayed ? `<div style="font-size: 0.7rem; color: var(--accent-rose); font-weight: 700; margin-top: 0.15rem;">⚠️ DELAYED</div>` : (isExpedited ? `<div style="font-size: 0.7rem; color: var(--color-green); font-weight: 700; margin-top: 0.15rem;">✈️ EXPEDITED AIR</div>` : '');
       return `
         <tr>
           <td><strong>${s.shipment_code}</strong></td>
@@ -969,11 +1052,16 @@ async function loadAllData() {
 
 async function updateDataField(table, id, field, value) {
   try {
-    await fetch('/api/data/update', {
+    const res = await fetch('/api/data/update', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ table, id, field, value: parseInt(value) || value })
     });
+    const data = await res.json();
+    if (!res.ok) {
+      alert('Update failed: ' + (data.error || 'Unauthorized field update'));
+      return;
+    }
     loadAllData();
     initDashboard();
   } catch (err) {

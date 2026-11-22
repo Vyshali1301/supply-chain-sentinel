@@ -3,5 +3,9 @@ __pycache__/
 *.db
 .env
 venv/
+.venv/
+.tools/
+.pytest_cache/
+*.log
 .idea/
 .vscode/

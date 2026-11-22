@@ -85,9 +85,12 @@
     
     <!-- Top Command Header -->
     <header class="top-header">
-      <div class="header-title-box">
-        <h1 class="header-title">SUPPLY CHAIN OPERATIONS COMMAND</h1>
-        <p class="header-subtitle">Real-time visibility across supply signals, inventory, inbound shipments and customer commitments.</p>
+      <div style="display: flex; align-items: center; gap: 0.75rem;">
+        <button class="mobile-menu-btn" id="mobileMenuBtn" onclick="toggleSidebar()" aria-label="Toggle Navigation">☰</button>
+        <div class="header-title-box">
+          <h1 class="header-title">SUPPLY CHAIN OPERATIONS COMMAND</h1>
+          <p class="header-subtitle">Real-time visibility across supply signals, inventory, inbound shipments and customer commitments.</p>
+        </div>
       </div>
       <div class="header-right">
         <span class="time-badge" id="liveClock">LIVE OPERATIONS</span>
@@ -191,13 +194,8 @@
                 <div class="ops-card-title">OPERATIONAL ALERTS</div>
               </div>
               <div class="alerts-list" id="dashboardAlertsContainer">
-                <div class="alert-item red-alert">
-                  <div class="alert-header">
-                    <span class="alert-tag text-red">CRITICAL SHORTAGE RISK</span>
-                    <span class="alert-time">SHP-5001</span>
-                  </div>
-                  <div class="alert-body">Laptop X: 5-Day Transportation Delay</div>
-                  <div class="alert-footer">Shortage: 450 Units | Order Risk: ₹4,27,50,000</div>
+                <div style="padding: 1rem; text-align: center; color: var(--text-muted); font-size: 0.8rem;">
+                  Monitoring active operational disruption signals...
                 </div>
               </div>
             </div>
